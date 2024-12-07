@@ -123,6 +123,9 @@ namespace Markdown
 
                 yield return new TestCaseData("H _e __l__ l_ o", "H <em>e __l__ l</em> o").
                     SetName("Correct converting if there are bold tags inside italic tags");
+
+                yield return new TestCaseData("H _e __l_ l__ o", "H _e __l_ l__ o").
+                    SetName("Correct converting if there are intersection of tags");
             }
         }
 
@@ -132,6 +135,9 @@ namespace Markdown
             {
                 yield return new TestCaseData(@"\Hello\", @"\Hello\").
                     SetName("Correct conversion if the escape symbol does not escape anything");
+
+                yield return new TestCaseData(@"\\\_Hello_", @"\_Hello_").
+                    SetName("Correct conversion with multiply escaping");
 
                 yield return new TestCaseData(@"\_Hello_", @"_Hello_").
                     SetName("Correct conversion if the escaping character escapes the italic tag");
@@ -144,6 +150,37 @@ namespace Markdown
 
                 yield return new TestCaseData(@"\# Hello", @"# Hello").
                     SetName("Correct conversion if the escaping character escapes the header tag");
+            }
+        }
+
+        public static IEnumerable<TestCaseData> BigTests
+        {
+            get
+            {
+                yield return new TestCaseData(
+                    "#заголовок __с жирным текстом__ \n" +
+                    "Просто текст, в котором _курсивные_ выделения\n" +
+                    "__Есть жирный текст__\n" +
+                    "__А вот жирный текст _с курсивом_ внутри _и ещё курсив_ в жирном__\n" +
+                    "_Вот __это_ не__ сработает\n" +
+                    "_И вот так __тоже__ нет_\n" +
+                    "Это - _ - просто подчёркивание\n" +
+                    "Так_ не работает_\n" +
+                    "И _ вот так _ тоже\n" +
+                    "В с_лов_е можно выделять, а в цифрах 1_23_ нет\n",
+
+                    "<h1>заголовок <strong>с жирным текстом</strong> </h1>\n" +
+                    "Просто текст, в котором <em>курсивные</em> выделения\n" +
+                    "<strong>Есть жирный текст</strong>\n" +
+                    "<strong>А вот жирный текст <em>с курсивом</em> внутри <em>и ещё курсив</em> в жирном</strong>\n" +
+                    "_Вот __это_ не__ сработает\n" +
+                    "<em>И вот так __тоже__ нет</em>\n" +
+                    "Это - _ - просто подчёркивание\n" +
+                    "Так_ не работает_\n" +
+                    "И _ вот так _ тоже\n" +
+                    "В с<em>лов</em>е можно выделять, а в цифрах 1_23_ нет\n"
+                    ).
+                    SetName("Correct conversion with multiply lines");
             }
         }
     }

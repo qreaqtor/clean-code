@@ -5,12 +5,14 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Markdown.Extensions;
 
 namespace Markdown.Parser
 {
     public class MarkdownParser : IMarkdownParser
     {
         private readonly ITagChecker _tagChecker;
+
         private readonly Stack<MdTag> needClosingTags;
         private readonly Queue<Tag> offsetTags;
 
@@ -18,6 +20,7 @@ namespace Markdown.Parser
         private readonly Dictionary<Tag, string> _mdTags;
 
         private int currentIndex;
+        private int offset;
 
         public MarkdownParser(ITagChecker tagChecker, Dictionary<Tag, Tag> differentTagTypes, Dictionary<Tag, string> mdTags)
         {
@@ -35,6 +38,8 @@ namespace Markdown.Parser
             var lines = markdownText.Split('\n');
             var fountedTokens = new List<Token>();
 
+            offset = 0;
+
             foreach (var line in lines)
             {
                 needClosingTags.Clear();
@@ -43,6 +48,8 @@ namespace Markdown.Parser
                 currentIndex = 0;
 
                 SearchTokensInLine(line, fountedTokens);
+
+                offset += line.Length + 1;
             }
 
             return fountedTokens;
@@ -65,10 +72,10 @@ namespace Markdown.Parser
             switch (tagType)
             {
                 case Tag.Header:
-                    fountedTokens.Add(new Token(Tag.Header, 0, line.Length - 1));
+                    fountedTokens.Add(new Token(Tag.Header, offset, offset+line.Length - 1));
                     break;
                 case Tag.EscapedSymbol:
-                    fountedTokens.Add(new Token(Tag.EscapedSymbol, currentIndex, currentIndex));
+                    fountedTokens.Add(new Token(Tag.EscapedSymbol, offset+currentIndex, offset + currentIndex));
                     currentIndex += 1;
                     break;
                 case Tag.None:
@@ -81,7 +88,7 @@ namespace Markdown.Parser
 
         private void TryAddToken(Tag tagType, string line, List<Token> fountedTokens)
         {
-            var openingTag = FindOpeningTag(tagType, currentIndex);
+            var openingTag = FindOpeningTag(tagType, offset+currentIndex);
 
             if (openingTag.Tag == Tag.None)
             {
@@ -94,7 +101,7 @@ namespace Markdown.Parser
 
         private void HandleExistingTag(Tag tagType, string line, List<Token> fountedTokens, MdTag openingTag)
         {
-            var token = new Token(tagType, openingTag.Index, currentIndex);
+            var token = new Token(tagType, openingTag.Index, offset + currentIndex);
 
             if (IsPossibleToAdd(token, line))
             {
@@ -104,7 +111,7 @@ namespace Markdown.Parser
 
             if (offsetTags.Count > 0 && offsetTags.Peek() == tagType)
             {
-                needClosingTags.Push(new MdTag(tagType, currentIndex));
+                needClosingTags.Push(new MdTag(tagType, offset+currentIndex));
                 offsetTags.Dequeue();
             }
         }
@@ -112,20 +119,24 @@ namespace Markdown.Parser
         private void HandleNotATag(Tag tagType, string line)
         {
             if (currentIndex < line.Length - 1 && !char.IsWhiteSpace(line[currentIndex + 1]))
-                needClosingTags.Push(new MdTag(tagType, currentIndex));
+                needClosingTags.Push(new MdTag(tagType, offset + currentIndex));
         }
 
         private bool IsPossibleToAdd(Token token, string line)
         {
             var shift = _mdTags[token.TagType].Length;
             var diffTagType = _differentTagTypes[token.TagType];
-            var anyWhiteSpace = line.Substring(token.StartIndex + 1, token.EndIndex - token.StartIndex - 1).Any(char.IsWhiteSpace);
 
-            return !(char.IsWhiteSpace(line[token.EndIndex - shift])
+            var anyWhiteSpace = line.SubstringContainsAny(token.StartIndex + 1 - offset, token.EndIndex - token.StartIndex - 1, char.IsWhiteSpace);
+
+            var anyLetter = line.SubstringContainsAny(token.StartIndex + 1 - offset, token.EndIndex - token.StartIndex - 1, char.IsLetter);
+
+            return anyLetter && !(
+                char.IsWhiteSpace(line[token.EndIndex - shift - offset])
                 || offsetTags.Dequeue() == diffTagType
-                || token.EndIndex < line.Length - 1 && !char.IsWhiteSpace(line[token.EndIndex + 1]) && anyWhiteSpace
+                || token.EndIndex - offset < line.Length - 1 && !char.IsWhiteSpace(line[token.EndIndex + 1 - offset]) && anyWhiteSpace
                 || token.TagType == Tag.Bold && needClosingTags.Any(tag => tag.Tag == diffTagType)
-                || token.StartIndex - 1 > 0 && !char.IsWhiteSpace(line[token.StartIndex - shift]) && anyWhiteSpace
+                || token.StartIndex - 1 - offset> 0 && !char.IsWhiteSpace(line[token.StartIndex - shift - offset]) && anyWhiteSpace
                 );
         }
 
